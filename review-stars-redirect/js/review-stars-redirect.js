@@ -110,10 +110,14 @@
 		}
 
 		// Esegui il redirect se l'URL è configurato.
+		// Aggiunge il parametro rsr_rating=N all'URL per passare il valore al form di destinazione.
 		if ( url ) {
+			var separator = url.indexOf( '?' ) === -1 ? '?' : '&';
+			var redirectUrl = url + separator + 'rsr_rating=' + value;
+
 			// Breve ritardo per mostrare il feedback visivo prima del redirect.
 			setTimeout( function () {
-				window.location.href = url;
+				window.location.href = redirectUrl;
 			}, 250 );
 		}
 	}

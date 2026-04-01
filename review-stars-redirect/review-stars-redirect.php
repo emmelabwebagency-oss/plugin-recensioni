@@ -137,7 +137,10 @@ function rsr_high_rating_url_field() {
  */
 function rsr_shortcode_display_field() {
 	echo '<input type="text" value="[review_stars_redirect]" class="regular-text" readonly="readonly" onclick="this.select();" />';
-	echo '<p class="description">' . esc_html__( 'Copia e incolla questo shortcode in qualsiasi pagina, post o widget Elementor.', 'review-stars-redirect' ) . '</p>';
+	echo '<p class="description">' . esc_html__( 'Mostra le 5 stelline cliccabili. Copia e incolla in qualsiasi pagina, post o widget Elementor.', 'review-stars-redirect' ) . '</p>';
+	echo '<br />';
+	echo '<input type="text" value="[review_stars_rating]" class="regular-text" readonly="readonly" onclick="this.select();" />';
+	echo '<p class="description">' . esc_html__( 'Stampa il valore della valutazione selezionata (1-5). Usalo come default value di un campo nel form di destinazione.', 'review-stars-redirect' ) . '</p>';
 }
 
 /**
@@ -269,6 +272,43 @@ function rsr_render_shortcode( $atts ) {
 	return $output;
 }
 add_shortcode( 'review_stars_redirect', 'rsr_render_shortcode' );
+
+/**
+ * Shortcode [review_stars_rating]: stampa il valore della valutazione selezionata.
+ *
+ * Legge il parametro GET "rsr_rating" dall'URL (aggiunto automaticamente dal redirect
+ * delle stelline) e restituisce il valore numerico (1-5).
+ * Utile per pre-compilare un campo in un form di contatto.
+ *
+ * Attributi opzionali:
+ * - default: valore da mostrare se il parametro non è presente (default: vuoto).
+ *
+ * Esempio: [review_stars_rating default="0"]
+ *
+ * @param array $atts Attributi dello shortcode.
+ * @return string Valore della valutazione.
+ */
+function rsr_render_rating_shortcode( $atts ) {
+	$atts = shortcode_atts(
+		array(
+			'default' => '',
+		),
+		$atts,
+		'review_stars_rating'
+	);
+
+	// Legge il parametro rsr_rating dall'URL.
+	// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+	$rating = isset( $_GET['rsr_rating'] ) ? absint( $_GET['rsr_rating'] ) : 0;
+
+	// Valida che il valore sia tra 1 e 5.
+	if ( $rating >= 1 && $rating <= 5 ) {
+		return (string) $rating;
+	}
+
+	return esc_html( $atts['default'] );
+}
+add_shortcode( 'review_stars_rating', 'rsr_render_rating_shortcode' );
 
 /**
  * Imposta i valori predefiniti al momento dell'attivazione del plugin.
