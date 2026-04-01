@@ -3,7 +3,7 @@
  * Plugin Name: Review Stars Redirect
  * Plugin URI:  https://github.com/emmelabwebagency-oss/plugin-recensioni
  * Description: Crea multipli shortcode con 5 stelline cliccabili, ognuno con regole di redirect personalizzabili per ogni stella. Compatibile con Elementor.
- * Version:     2.0.0
+ * Version:     2.1.0
  * Author:      Emmelab Web Agency
  * Author URI:  https://emmelabwebagency.com
  * License:     GPL-2.0-or-later
@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Costanti del plugin.
  */
-define( 'RSR_VERSION', '2.0.0' );
+define( 'RSR_VERSION', '2.1.0' );
 define( 'RSR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'RSR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'RSR_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
