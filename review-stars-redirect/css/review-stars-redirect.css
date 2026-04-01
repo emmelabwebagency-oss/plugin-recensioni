@@ -1,0 +1,106 @@
+/**
+ * Review Stars Redirect — Frontend Styles
+ *
+ * Stile delle stelline di valutazione nel frontend.
+ * Pulito, moderno, responsive. Nessuna dipendenza esterna.
+ */
+
+/* Contenitore principale */
+.rsr-stars-wrapper {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 16px 0;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+/* Tooltip / messaggio sopra le stelle */
+.rsr-tooltip {
+	font-size: 15px;
+	color: #555;
+	margin: 0 0 4px 0;
+	font-weight: 500;
+	letter-spacing: 0.2px;
+}
+
+/* Contenitore stelle */
+.rsr-stars {
+	display: inline-flex;
+	gap: 6px;
+	align-items: center;
+}
+
+/* Singola stella */
+.rsr-star {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	transition: transform 0.15s ease;
+	outline: none;
+	border-radius: 4px;
+}
+
+/* Effetto hover scala */
+.rsr-star:hover,
+.rsr-star:focus-visible {
+	transform: scale(1.15);
+}
+
+/* Focus visibile per accessibilità */
+.rsr-star:focus-visible {
+	box-shadow: 0 0 0 2px #f5a623;
+}
+
+/* SVG stella — stato default (grigio chiaro) */
+.rsr-star-svg {
+	fill: #d4d4d4;
+	stroke: #bbb;
+	stroke-width: 0.5;
+	transition: fill 0.15s ease, stroke 0.15s ease;
+}
+
+/* Stella attiva (hover o selezionata) — gialla */
+.rsr-star.rsr-active .rsr-star-svg,
+.rsr-star.rsr-hover .rsr-star-svg {
+	fill: #f5a623;
+	stroke: #e09500;
+}
+
+/* Stella selezionata — conferma visiva */
+.rsr-star.rsr-selected .rsr-star-svg {
+	fill: #f5a623;
+	stroke: #e09500;
+}
+
+/* ===== Responsive ===== */
+
+/* Tablet e mobile */
+@media (max-width: 600px) {
+	.rsr-star-svg {
+		width: 36px;
+		height: 36px;
+	}
+
+	.rsr-stars {
+		gap: 4px;
+	}
+
+	.rsr-tooltip {
+		font-size: 14px;
+	}
+}
+
+/* Schermi molto piccoli */
+@media (max-width: 380px) {
+	.rsr-star-svg {
+		width: 30px;
+		height: 30px;
+	}
+
+	.rsr-stars {
+		gap: 2px;
+	}
+}
