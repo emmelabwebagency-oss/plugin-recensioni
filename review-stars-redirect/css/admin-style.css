@@ -1,0 +1,187 @@
+/**
+ * Review Stars Redirect — Admin Styles v2.0.0
+ *
+ * Stile per la pagina impostazioni nel pannello admin.
+ */
+
+/* Descrizione sotto il titolo */
+.rsr-admin-description {
+	font-size: 14px;
+	color: #555;
+	margin-bottom: 20px;
+}
+
+/* Sezione lista istanze */
+.rsr-list-section .wp-list-table code {
+	background: #f0f0f1;
+	padding: 3px 8px;
+	font-size: 13px;
+	cursor: pointer;
+	border-radius: 3px;
+}
+
+.rsr-list-section .wp-list-table code:hover {
+	background: #e0e0e1;
+}
+
+/* Pulsante elimina */
+.rsr-delete-btn {
+	color: #b32d2e !important;
+	border-color: #b32d2e !important;
+}
+
+.rsr-delete-btn:hover {
+	background: #b32d2e !important;
+	color: #fff !important;
+}
+
+/* Nessuna istanza */
+.rsr-no-instances {
+	font-size: 14px;
+	color: #666;
+	padding: 20px 0;
+}
+
+/* Sezione creazione */
+.rsr-create-section {
+	margin-top: 30px;
+	padding-top: 20px;
+	border-top: 1px solid #ddd;
+}
+
+/* Sezione modifica */
+.rsr-edit-section {
+	max-width: 800px;
+}
+
+/* Shortcode evidenziato */
+.rsr-shortcode-code {
+	background: #f0f0f1;
+	padding: 4px 10px;
+	font-size: 14px;
+	cursor: pointer;
+	border-radius: 3px;
+	display: inline-block;
+}
+
+.rsr-shortcode-code:hover {
+	background: #e0e0e1;
+}
+
+.rsr-copy-hint {
+	font-size: 12px;
+	color: #888;
+	margin-left: 6px;
+}
+
+/* Righe delle regole */
+.rsr-rule-row {
+	background: #fff;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	padding: 15px;
+	margin-bottom: 12px;
+	position: relative;
+}
+
+.rsr-rule-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 12px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid #eee;
+}
+
+.rsr-rule-header strong {
+	font-size: 14px;
+	color: #333;
+}
+
+/* Pulsante rimuovi regola */
+.rsr-remove-rule {
+	color: #b32d2e !important;
+	border-color: #b32d2e !important;
+	font-size: 18px !important;
+	line-height: 1 !important;
+	padding: 2px 8px !important;
+	min-height: auto !important;
+}
+
+.rsr-remove-rule:hover {
+	background: #b32d2e !important;
+	color: #fff !important;
+}
+
+/* Contenuto regola */
+.rsr-rule-content {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 15px;
+	align-items: flex-start;
+}
+
+/* Stelle nella regola */
+.rsr-rule-stars {
+	flex: 0 0 auto;
+}
+
+.rsr-rule-stars > label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 6px;
+	font-size: 13px;
+}
+
+.rsr-star-checkboxes {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.rsr-star-checkbox {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	padding: 4px 8px;
+	background: #f7f7f7;
+	border: 1px solid #ddd;
+	border-radius: 3px;
+	font-size: 13px;
+	cursor: pointer;
+	transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.rsr-star-checkbox:hover {
+	background: #fff3cd;
+	border-color: #f5a623;
+}
+
+/* URL nella regola */
+.rsr-rule-url {
+	flex: 1;
+	min-width: 250px;
+}
+
+.rsr-rule-url > label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 6px;
+	font-size: 13px;
+}
+
+.rsr-rule-url input {
+	width: 100%;
+}
+
+/* Responsive: stack su mobile */
+@media screen and (max-width: 600px) {
+	.rsr-rule-content {
+		flex-direction: column;
+	}
+
+	.rsr-rule-url {
+		min-width: auto;
+		width: 100%;
+	}
+}
