@@ -70,6 +70,16 @@ function rsr_register_settings() {
 		)
 	);
 
+	register_setting(
+		'rsr_settings_group',
+		'rsr_rating_field_id',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'sanitize_text_field',
+			'default'           => 'rating',
+		)
+	);
+
 	// Sezione impostazioni.
 	add_settings_section(
 		'rsr_main_section',
@@ -92,6 +102,15 @@ function rsr_register_settings() {
 		'rsr_high_rating_url',
 		__( 'Link redirect (4-5 stelle)', 'review-stars-redirect' ),
 		'rsr_high_rating_url_field',
+		'review-stars-redirect',
+		'rsr_main_section'
+	);
+
+	// Campo: ID del campo rating nel form.
+	add_settings_field(
+		'rsr_rating_field_id',
+		__( 'ID campo rating nel form', 'review-stars-redirect' ),
+		'rsr_rating_field_id_field',
 		'review-stars-redirect',
 		'rsr_main_section'
 	);
@@ -133,14 +152,23 @@ function rsr_high_rating_url_field() {
 }
 
 /**
+ * Campo: ID del campo rating nel form di destinazione.
+ */
+function rsr_rating_field_id_field() {
+	$value = get_option( 'rsr_rating_field_id', 'rating' );
+	echo '<input type="text" name="rsr_rating_field_id" value="' . esc_attr( $value ) . '" class="regular-text" placeholder="rating" />';
+	echo '<p class="description">' . esc_html__( 'L\'ID del campo nel form di destinazione dove verrà inserito automaticamente il valore della valutazione. In Elementor Forms, corrisponde al campo "ID" nella tab Advanced del campo.', 'review-stars-redirect' ) . '</p>';
+}
+
+/**
  * Campo: shortcode in sola lettura da copiare.
  */
 function rsr_shortcode_display_field() {
 	echo '<input type="text" value="[review_stars_redirect]" class="regular-text" readonly="readonly" onclick="this.select();" />';
 	echo '<p class="description">' . esc_html__( 'Mostra le 5 stelline cliccabili. Copia e incolla in qualsiasi pagina, post o widget Elementor.', 'review-stars-redirect' ) . '</p>';
 	echo '<br />';
-	echo '<input type="text" value="[review_stars_rating]" class="regular-text" readonly="readonly" onclick="this.select();" />';
-	echo '<p class="description">' . esc_html__( 'Stampa il valore della valutazione selezionata (1-5). Usalo come default value di un campo nel form di destinazione.', 'review-stars-redirect' ) . '</p>';
+	echo '<strong>' . esc_html__( 'Auto-fill campo form:', 'review-stars-redirect' ) . '</strong>';
+	echo '<p class="description">' . esc_html__( 'Il valore della valutazione viene passato automaticamente tramite URL (?rsr_rating=N) e compilato via JavaScript nel campo del form con l\'ID configurato sopra. Nessuno shortcode necessario nel form!', 'review-stars-redirect' ) . '</p>';
 }
 
 /**
@@ -274,11 +302,49 @@ function rsr_render_shortcode( $atts ) {
 add_shortcode( 'review_stars_redirect', 'rsr_render_shortcode' );
 
 /**
+ * Carica lo script di auto-fill sul frontend.
+ *
+ * Quando la pagina contiene il parametro GET "rsr_rating", carica
+ * lo script che compila automaticamente il campo del form con l'ID configurato.
+ * Funziona con Elementor Forms, CF7, WPForms, ecc.
+ */
+function rsr_enqueue_autofill_script() {
+	// Carica solo sul frontend, non nell'admin.
+	if ( is_admin() ) {
+		return;
+	}
+
+	// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+	if ( ! isset( $_GET['rsr_rating'] ) ) {
+		return;
+	}
+
+	wp_enqueue_script(
+		'rsr-autofill-script',
+		RSR_PLUGIN_URL . 'js/review-stars-autofill.js',
+		array(),
+		RSR_VERSION,
+		true
+	);
+
+	$field_id = get_option( 'rsr_rating_field_id', 'rating' );
+
+	wp_localize_script(
+		'rsr-autofill-script',
+		'rsrAutofill',
+		array(
+			'fieldId' => sanitize_text_field( $field_id ),
+		)
+	);
+}
+add_action( 'wp_enqueue_scripts', 'rsr_enqueue_autofill_script' );
+
+/**
  * Shortcode [review_stars_rating]: stampa il valore della valutazione selezionata.
  *
  * Legge il parametro GET "rsr_rating" dall'URL (aggiunto automaticamente dal redirect
  * delle stelline) e restituisce il valore numerico (1-5).
- * Utile per pre-compilare un campo in un form di contatto.
+ * Utile come fallback per plugin form che supportano shortcode nei default value.
  *
  * Attributi opzionali:
  * - default: valore da mostrare se il parametro non è presente (default: vuoto).
@@ -320,6 +386,9 @@ function rsr_activate() {
 	if ( false === get_option( 'rsr_high_rating_url' ) ) {
 		add_option( 'rsr_high_rating_url', '' );
 	}
+	if ( false === get_option( 'rsr_rating_field_id' ) ) {
+		add_option( 'rsr_rating_field_id', 'rating' );
+	}
 }
 register_activation_hook( __FILE__, 'rsr_activate' );
 
@@ -329,5 +398,6 @@ register_activation_hook( __FILE__, 'rsr_activate' );
 function rsr_uninstall() {
 	delete_option( 'rsr_low_rating_url' );
 	delete_option( 'rsr_high_rating_url' );
+	delete_option( 'rsr_rating_field_id' );
 }
 register_uninstall_hook( __FILE__, 'rsr_uninstall' );
