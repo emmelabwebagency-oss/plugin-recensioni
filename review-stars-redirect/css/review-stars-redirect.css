@@ -62,8 +62,7 @@
 	transition: fill 0.15s ease, stroke 0.15s ease;
 }
 
-/* Stella attiva (hover o selezionata) — gialla */
-.rsr-star.rsr-active .rsr-star-svg,
+/* Stella evidenziata (hover) — gialla */
 .rsr-star.rsr-hover .rsr-star-svg {
 	fill: #f5a623;
 	stroke: #e09500;
