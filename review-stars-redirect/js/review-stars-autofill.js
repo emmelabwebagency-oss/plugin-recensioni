@@ -4,11 +4,18 @@
  * Legge il parametro "rsr_rating" dall'URL e compila automaticamente
  * i campi del form che hanno l'ID specificato in rsrAutofill.fieldId.
  *
+ * Usa MutationObserver + retry con intervallo per gestire form caricati
+ * dinamicamente (es. Elementor Forms che renderizza dopo DOMContentLoaded).
+ *
  * Funziona con Elementor Forms, Contact Form 7, WPForms, Gravity Forms, ecc.
  * Nessuna dipendenza esterna.
  */
 (function () {
 	'use strict';
+
+	// Numero massimo di tentativi (ogni 300ms = ~3 secondi totali).
+	var MAX_ATTEMPTS = 10;
+	var RETRY_INTERVAL = 300;
 
 	/**
 	 * Legge un parametro GET dall'URL corrente.
@@ -22,9 +29,84 @@
 	}
 
 	/**
-	 * Compila il campo del form con il valore della valutazione.
+	 * Restituisce i selettori CSS per trovare il campo del form.
+	 *
+	 * @param {string} fieldId ID del campo configurato.
+	 * @return {Array} Array di selettori CSS.
 	 */
-	function fillRatingField() {
+	function getSelectors( fieldId ) {
+		return [
+			'#form-field-' + fieldId,
+			'#' + fieldId,
+			'[name="' + fieldId + '"]',
+			'[name="form_fields[' + fieldId + ']"]',
+			'[data-rsr-rating]'
+		];
+	}
+
+	/**
+	 * Cerca e compila il campo del form con il valore della valutazione.
+	 *
+	 * @param {number} ratingNum Valore della valutazione (1-5).
+	 * @param {string} fieldId   ID del campo da compilare.
+	 * @return {boolean} true se il campo è stato trovato e compilato.
+	 */
+	function tryFillField( ratingNum, fieldId ) {
+		var selectors = getSelectors( fieldId );
+		var filled = false;
+
+		selectors.forEach( function ( selector ) {
+			try {
+				var fields = document.querySelectorAll( selector );
+				fields.forEach( function ( field ) {
+					field.value = ratingNum;
+
+					// Trigger eventi per compatibilità con framework JS.
+					field.dispatchEvent( new Event( 'input', { bubbles: true } ) );
+					field.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+
+					filled = true;
+				});
+			} catch ( e ) {
+				// Selettore non valido, ignora.
+			}
+		});
+
+		return filled;
+	}
+
+	/**
+	 * Usa MutationObserver per intercettare l'aggiunta del campo nel DOM.
+	 *
+	 * @param {number} ratingNum Valore della valutazione.
+	 * @param {string} fieldId   ID del campo da compilare.
+	 */
+	function startObserver( ratingNum, fieldId ) {
+		if ( typeof MutationObserver === 'undefined' ) {
+			return;
+		}
+
+		var observer = new MutationObserver( function () {
+			if ( tryFillField( ratingNum, fieldId ) ) {
+				observer.disconnect();
+			}
+		});
+
+		observer.observe( document.body, {
+			childList: true,
+			subtree: true
+		});
+
+		// Timeout di sicurezza: disconnetti dopo 10 secondi.
+		setTimeout( function () {
+			observer.disconnect();
+		}, 10000 );
+	}
+
+	/**
+	 * Avvia il processo di auto-fill con retry e MutationObserver.
+	 */
+	function init() {
 		var rating = getUrlParam( 'rsr_rating' );
 
 		// Valida che il valore sia un numero tra 1 e 5.
@@ -43,42 +125,29 @@
 			fieldId = rsrAutofill.fieldId;
 		}
 
-		// Cerca il campo per ID (Elementor Forms usa form-field-{id}).
-		var selectors = [
-			'#form-field-' + fieldId,
-			'#' + fieldId,
-			'[name="' + fieldId + '"]',
-			'[name="form_fields[' + fieldId + ']"]'
-		];
-
-		var filled = false;
-
-		selectors.forEach( function ( selector ) {
-			var fields = document.querySelectorAll( selector );
-			fields.forEach( function ( field ) {
-				field.value = ratingNum;
-				// Trigger evento change per compatibilità con framework JS.
-				var event = new Event( 'change', { bubbles: true } );
-				field.dispatchEvent( event );
-				filled = true;
-			});
-		});
-
-		// Fallback: cerca anche per attributo data-rsr-rating.
-		if ( ! filled ) {
-			var dataFields = document.querySelectorAll( '[data-rsr-rating]' );
-			dataFields.forEach( function ( field ) {
-				field.value = ratingNum;
-				var event = new Event( 'change', { bubbles: true } );
-				field.dispatchEvent( event );
-			});
+		// Primo tentativo immediato.
+		if ( tryFillField( ratingNum, fieldId ) ) {
+			return;
 		}
+
+		// MutationObserver per intercettare quando il campo viene aggiunto al DOM.
+		startObserver( ratingNum, fieldId );
+
+		// Retry con intervallo come ulteriore sicurezza per form lenti.
+		var attempts = 0;
+		var retryTimer = setInterval( function () {
+			attempts++;
+
+			if ( tryFillField( ratingNum, fieldId ) || attempts >= MAX_ATTEMPTS ) {
+				clearInterval( retryTimer );
+			}
+		}, RETRY_INTERVAL );
 	}
 
 	// Avvia quando il DOM è pronto.
 	if ( document.readyState === 'loading' ) {
-		document.addEventListener( 'DOMContentLoaded', fillRatingField );
+		document.addEventListener( 'DOMContentLoaded', init );
 	} else {
-		fillRatingField();
+		init();
 	}
 })();
