@@ -248,8 +248,7 @@ function rsr_render_shortcode( $atts ) {
 	);
 
 	// Genera l'HTML delle stelline.
-	$output  = '<div class="rsr-stars-wrapper" role="group" aria-label="' . esc_attr__( 'Lascia la tua recensione', 'review-stars-redirect' ) . '">';
-	$output .= '<p class="rsr-tooltip">' . esc_html__( 'Lascia la tua recensione', 'review-stars-redirect' ) . '</p>';
+	$output  = '<div class="rsr-stars-wrapper" role="group" aria-label="' . esc_attr__( 'Valutazione', 'review-stars-redirect' ) . '">';
 	$output .= '<div class="rsr-stars">';
 
 	for ( $i = 1; $i <= 5; $i++ ) {

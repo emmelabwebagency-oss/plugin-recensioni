@@ -16,15 +16,6 @@
 	-webkit-user-select: none;
 }
 
-/* Tooltip / messaggio sopra le stelle */
-.rsr-tooltip {
-	font-size: 15px;
-	color: #555;
-	margin: 0 0 4px 0;
-	font-weight: 500;
-	letter-spacing: 0.2px;
-}
-
 /* Contenitore stelle */
 .rsr-stars {
 	display: inline-flex;
