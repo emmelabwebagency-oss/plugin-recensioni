@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Review Stars Redirect
  * Plugin URI:  https://github.com/emmelabwebagency-oss/plugin-recensioni
- * Description: Mostra 5 stelline cliccabili tramite shortcode. In base alla valutazione, reindirizza l'utente a link diversi configurabili dal backend. Compatibile con Elementor.
- * Version:     1.0.0
+ * Description: Crea multipli shortcode con 5 stelline cliccabili, ognuno con regole di redirect personalizzabili per ogni stella. Compatibile con Elementor.
+ * Version:     2.0.0
  * Author:      Emmelab Web Agency
  * Author URI:  https://emmelabwebagency.com
  * License:     GPL-2.0-or-later
@@ -20,10 +20,55 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Costanti del plugin.
  */
-define( 'RSR_VERSION', '1.0.0' );
+define( 'RSR_VERSION', '2.0.0' );
 define( 'RSR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'RSR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'RSR_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
+
+/**
+ * ============================================================
+ * HELPER: Gestione dati istanze
+ * ============================================================
+ */
+
+/**
+ * Recupera tutte le istanze salvate.
+ *
+ * @return array Array di istanze. Ogni istanza ha: id, name, rules.
+ *               Ogni regola ha: stars (array di int), url (string).
+ */
+function rsr_get_instances() {
+	$instances = get_option( 'rsr_instances', array() );
+	if ( ! is_array( $instances ) ) {
+		return array();
+	}
+	return $instances;
+}
+
+/**
+ * Salva le istanze.
+ *
+ * @param array $instances Array di istanze.
+ */
+function rsr_save_instances( $instances ) {
+	update_option( 'rsr_instances', $instances );
+}
+
+/**
+ * Recupera una singola istanza per ID.
+ *
+ * @param string $id ID dell'istanza.
+ * @return array|null L'istanza o null se non trovata.
+ */
+function rsr_get_instance( $id ) {
+	$instances = rsr_get_instances();
+	foreach ( $instances as $instance ) {
+		if ( isset( $instance['id'] ) && $instance['id'] === $id ) {
+			return $instance;
+		}
+	}
+	return null;
+}
 
 /**
  * ============================================================
@@ -46,160 +91,363 @@ function rsr_add_admin_menu() {
 add_action( 'admin_menu', 'rsr_add_admin_menu' );
 
 /**
- * Registra le impostazioni con la Settings API di WordPress.
+ * Gestisce le azioni admin (salva, elimina, crea istanze).
  */
-function rsr_register_settings() {
-	// Registra il gruppo di opzioni.
-	register_setting(
-		'rsr_settings_group',
-		'rsr_low_rating_url',
-		array(
-			'type'              => 'string',
-			'sanitize_callback' => 'esc_url_raw',
-			'default'           => '',
-		)
-	);
+function rsr_handle_admin_actions() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
 
-	register_setting(
-		'rsr_settings_group',
-		'rsr_high_rating_url',
-		array(
-			'type'              => 'string',
-			'sanitize_callback' => 'esc_url_raw',
-			'default'           => '',
-		)
-	);
+	// Creazione nuova istanza.
+	if ( isset( $_POST['rsr_action'] ) && 'create' === $_POST['rsr_action'] ) {
+		check_admin_referer( 'rsr_create_instance' );
 
-	register_setting(
-		'rsr_settings_group',
-		'rsr_rating_field_id',
-		array(
-			'type'              => 'string',
-			'sanitize_callback' => 'sanitize_text_field',
-			'default'           => 'rating',
-		)
-	);
+		$name = isset( $_POST['rsr_new_name'] ) ? sanitize_text_field( wp_unslash( $_POST['rsr_new_name'] ) ) : '';
+		if ( empty( $name ) ) {
+			$name = __( 'Nuovo Shortcode', 'review-stars-redirect' );
+		}
 
-	// Sezione impostazioni.
-	add_settings_section(
-		'rsr_main_section',
-		__( 'Configurazione Redirect', 'review-stars-redirect' ),
-		'rsr_section_description',
-		'review-stars-redirect'
-	);
+		$instances   = rsr_get_instances();
+		$new_id      = 'rsr_' . wp_generate_password( 8, false, false );
+		$instances[] = array(
+			'id'    => $new_id,
+			'name'  => $name,
+			'rules' => array(
+				array(
+					'stars' => array( 1, 2, 3 ),
+					'url'   => '',
+				),
+				array(
+					'stars' => array( 4, 5 ),
+					'url'   => '',
+				),
+			),
+		);
+		rsr_save_instances( $instances );
 
-	// Campo: link per valutazioni basse (1-3 stelle).
-	add_settings_field(
-		'rsr_low_rating_url',
-		__( 'Link redirect (1-3 stelle)', 'review-stars-redirect' ),
-		'rsr_low_rating_url_field',
-		'review-stars-redirect',
-		'rsr_main_section'
-	);
+		wp_safe_redirect( add_query_arg(
+			array(
+				'page'       => 'review-stars-redirect',
+				'edit'       => $new_id,
+				'rsr_notice' => 'created',
+			),
+			admin_url( 'options-general.php' )
+		) );
+		exit;
+	}
 
-	// Campo: link per valutazioni alte (4-5 stelle).
-	add_settings_field(
-		'rsr_high_rating_url',
-		__( 'Link redirect (4-5 stelle)', 'review-stars-redirect' ),
-		'rsr_high_rating_url_field',
-		'review-stars-redirect',
-		'rsr_main_section'
-	);
+	// Salvataggio istanza.
+	if ( isset( $_POST['rsr_action'] ) && 'save' === $_POST['rsr_action'] ) {
+		$edit_id = isset( $_POST['rsr_instance_id'] ) ? sanitize_text_field( wp_unslash( $_POST['rsr_instance_id'] ) ) : '';
+		check_admin_referer( 'rsr_save_instance_' . $edit_id );
 
-	// Campo: ID del campo rating nel form.
-	add_settings_field(
-		'rsr_rating_field_id',
-		__( 'ID campo rating nel form', 'review-stars-redirect' ),
-		'rsr_rating_field_id_field',
-		'review-stars-redirect',
-		'rsr_main_section'
-	);
+		$instances = rsr_get_instances();
+		$name      = isset( $_POST['rsr_instance_name'] ) ? sanitize_text_field( wp_unslash( $_POST['rsr_instance_name'] ) ) : '';
 
-	// Campo: shortcode in sola lettura.
-	add_settings_field(
-		'rsr_shortcode_display',
-		__( 'Shortcode da copiare', 'review-stars-redirect' ),
-		'rsr_shortcode_display_field',
-		'review-stars-redirect',
-		'rsr_main_section'
-	);
+		// Ricostruisci le regole dal POST.
+		$rules      = array();
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		$rule_stars = isset( $_POST['rsr_rule_stars'] ) && is_array( $_POST['rsr_rule_stars'] ) ? $_POST['rsr_rule_stars'] : array();
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		$rule_urls  = isset( $_POST['rsr_rule_urls'] ) && is_array( $_POST['rsr_rule_urls'] ) ? $_POST['rsr_rule_urls'] : array();
+
+		$rule_count = max( count( $rule_stars ), count( $rule_urls ) );
+		for ( $i = 0; $i < $rule_count; $i++ ) {
+			$stars_raw = isset( $rule_stars[ $i ] ) && is_array( $rule_stars[ $i ] ) ? $rule_stars[ $i ] : array();
+			$url_raw   = isset( $rule_urls[ $i ] ) ? $rule_urls[ $i ] : '';
+
+			// Sanitizza le stelle (solo valori 1-5).
+			$stars = array();
+			foreach ( $stars_raw as $s ) {
+				$s_int = absint( $s );
+				if ( $s_int >= 1 && $s_int <= 5 ) {
+					$stars[] = $s_int;
+				}
+			}
+
+			$url = esc_url_raw( wp_unslash( $url_raw ) );
+
+			// Salva solo regole con almeno una stella selezionata.
+			if ( ! empty( $stars ) ) {
+				$rules[] = array(
+					'stars' => $stars,
+					'url'   => $url,
+				);
+			}
+		}
+
+		// Aggiorna l'istanza.
+		foreach ( $instances as &$inst ) {
+			if ( $inst['id'] === $edit_id ) {
+				$inst['name']  = $name;
+				$inst['rules'] = $rules;
+				break;
+			}
+		}
+		unset( $inst );
+
+		rsr_save_instances( $instances );
+
+		wp_safe_redirect( add_query_arg(
+			array(
+				'page'       => 'review-stars-redirect',
+				'edit'       => $edit_id,
+				'rsr_notice' => 'saved',
+			),
+			admin_url( 'options-general.php' )
+		) );
+		exit;
+	}
+
+	// Eliminazione istanza.
+	if ( isset( $_GET['rsr_delete'] ) && isset( $_GET['_wpnonce'] ) ) {
+		$delete_id = sanitize_text_field( wp_unslash( $_GET['rsr_delete'] ) );
+		if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'rsr_delete_' . $delete_id ) ) {
+			wp_die( esc_html__( 'Nonce non valido.', 'review-stars-redirect' ) );
+		}
+
+		$instances = rsr_get_instances();
+		$instances = array_filter( $instances, function ( $inst ) use ( $delete_id ) {
+			return $inst['id'] !== $delete_id;
+		});
+		$instances = array_values( $instances );
+		rsr_save_instances( $instances );
+
+		wp_safe_redirect( add_query_arg(
+			array(
+				'page'       => 'review-stars-redirect',
+				'rsr_notice' => 'deleted',
+			),
+			admin_url( 'options-general.php' )
+		) );
+		exit;
+	}
 }
-add_action( 'admin_init', 'rsr_register_settings' );
-
-/**
- * Descrizione della sezione impostazioni.
- */
-function rsr_section_description() {
-	echo '<p>' . esc_html__( 'Configura i link di redirect in base alla valutazione selezionata dall\'utente.', 'review-stars-redirect' ) . '</p>';
-}
-
-/**
- * Campo: URL per valutazioni basse (1-3 stelle).
- */
-function rsr_low_rating_url_field() {
-	$value = get_option( 'rsr_low_rating_url', '' );
-	echo '<input type="url" name="rsr_low_rating_url" value="' . esc_attr( $value ) . '" class="regular-text" placeholder="https://esempio.com/form-recensione" />';
-	echo '<p class="description">' . esc_html__( 'L\'utente verrà reindirizzato a questo link se seleziona da 1 a 3 stelle (es. form recensione interna).', 'review-stars-redirect' ) . '</p>';
-}
-
-/**
- * Campo: URL per valutazioni alte (4-5 stelle).
- */
-function rsr_high_rating_url_field() {
-	$value = get_option( 'rsr_high_rating_url', '' );
-	echo '<input type="url" name="rsr_high_rating_url" value="' . esc_attr( $value ) . '" class="regular-text" placeholder="https://g.page/r/XXXX/review" />';
-	echo '<p class="description">' . esc_html__( 'L\'utente verrà reindirizzato a questo link se seleziona 4 o 5 stelle (es. pagina recensioni Google).', 'review-stars-redirect' ) . '</p>';
-}
-
-/**
- * Campo: ID del campo rating nel form di destinazione.
- */
-function rsr_rating_field_id_field() {
-	$value = get_option( 'rsr_rating_field_id', 'rating' );
-	echo '<input type="text" name="rsr_rating_field_id" value="' . esc_attr( $value ) . '" class="regular-text" placeholder="rating" />';
-	echo '<p class="description">' . esc_html__( 'L\'ID del campo nel form di destinazione dove verrà inserito automaticamente il valore della valutazione. In Elementor Forms, corrisponde al campo "ID" nella tab Advanced del campo.', 'review-stars-redirect' ) . '</p>';
-}
-
-/**
- * Campo: shortcode in sola lettura da copiare.
- */
-function rsr_shortcode_display_field() {
-	echo '<input type="text" value="[review_stars_redirect]" class="regular-text" readonly="readonly" onclick="this.select();" />';
-	echo '<p class="description">' . esc_html__( 'Mostra le 5 stelline cliccabili. Copia e incolla in qualsiasi pagina, post o widget Elementor.', 'review-stars-redirect' ) . '</p>';
-	echo '<br />';
-	echo '<strong>' . esc_html__( 'Auto-fill campo form:', 'review-stars-redirect' ) . '</strong>';
-	echo '<p class="description">' . esc_html__( 'Il valore della valutazione viene passato automaticamente tramite URL (?rsr_rating=N) e compilato via JavaScript nel campo del form con l\'ID configurato sopra. Nessuno shortcode necessario nel form!', 'review-stars-redirect' ) . '</p>';
-}
+add_action( 'admin_init', 'rsr_handle_admin_actions' );
 
 /**
  * Renderizza la pagina delle impostazioni admin.
  */
 function rsr_settings_page_html() {
-	// Verifica permessi.
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
 
-	// Messaggio di conferma salvataggio.
-	if ( isset( $_GET['settings-updated'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		add_settings_error(
-			'rsr_messages',
-			'rsr_message',
-			__( 'Impostazioni salvate con successo.', 'review-stars-redirect' ),
-			'updated'
-		);
+	$instances = rsr_get_instances();
+
+	// Mostra avvisi.
+	// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+	$notice = isset( $_GET['rsr_notice'] ) ? sanitize_text_field( wp_unslash( $_GET['rsr_notice'] ) ) : '';
+	if ( 'saved' === $notice ) {
+		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Impostazioni salvate con successo.', 'review-stars-redirect' ) . '</p></div>';
+	} elseif ( 'created' === $notice ) {
+		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Nuovo shortcode creato.', 'review-stars-redirect' ) . '</p></div>';
+	} elseif ( 'deleted' === $notice ) {
+		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Shortcode eliminato.', 'review-stars-redirect' ) . '</p></div>';
 	}
-	settings_errors( 'rsr_messages' );
+
+	// Determina se stiamo modificando un'istanza.
+	// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+	$edit_id       = isset( $_GET['edit'] ) ? sanitize_text_field( wp_unslash( $_GET['edit'] ) ) : '';
+	$edit_instance = null;
+	if ( $edit_id ) {
+		$edit_instance = rsr_get_instance( $edit_id );
+	}
+
 	?>
-	<div class="wrap">
-		<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
-		<form action="options.php" method="post">
-			<?php
-			settings_fields( 'rsr_settings_group' );
-			do_settings_sections( 'review-stars-redirect' );
-			submit_button( __( 'Salva Impostazioni', 'review-stars-redirect' ) );
-			?>
-		</form>
+	<div class="wrap rsr-admin-wrap">
+		<h1><?php esc_html_e( 'Review Stars Redirect', 'review-stars-redirect' ); ?></h1>
+		<p class="rsr-admin-description">
+			<?php esc_html_e( 'Crea e gestisci i tuoi shortcode con stelline. Ogni shortcode può avere regole di redirect personalizzate per ogni stella.', 'review-stars-redirect' ); ?>
+		</p>
+
+		<?php if ( $edit_instance ) : ?>
+			<!-- MODIFICA ISTANZA -->
+			<div class="rsr-edit-section">
+				<h2>
+					<?php
+					echo esc_html(
+						sprintf(
+							/* translators: %s: nome dell'istanza */
+							__( 'Modifica: %s', 'review-stars-redirect' ),
+							$edit_instance['name']
+						)
+					);
+					?>
+				</h2>
+				<p>
+					<strong><?php esc_html_e( 'Shortcode:', 'review-stars-redirect' ); ?></strong>
+					<code class="rsr-shortcode-code" onclick="if(window.getSelection){var r=document.createRange();r.selectNodeContents(this);var s=window.getSelection();s.removeAllRanges();s.addRange(r);document.execCommand('copy');}">
+						[review_stars_redirect id="<?php echo esc_attr( $edit_instance['id'] ); ?>"]
+					</code>
+					<span class="rsr-copy-hint"><?php esc_html_e( '(clicca per copiare)', 'review-stars-redirect' ); ?></span>
+				</p>
+
+				<form method="post" action="">
+					<?php wp_nonce_field( 'rsr_save_instance_' . $edit_instance['id'] ); ?>
+					<input type="hidden" name="rsr_action" value="save" />
+					<input type="hidden" name="rsr_instance_id" value="<?php echo esc_attr( $edit_instance['id'] ); ?>" />
+
+					<table class="form-table">
+						<tr>
+							<th scope="row">
+								<label for="rsr_instance_name"><?php esc_html_e( 'Nome', 'review-stars-redirect' ); ?></label>
+							</th>
+							<td>
+								<input type="text" id="rsr_instance_name" name="rsr_instance_name"
+									value="<?php echo esc_attr( $edit_instance['name'] ); ?>"
+									class="regular-text" />
+								<p class="description"><?php esc_html_e( 'Un nome identificativo per riconoscere questo shortcode (uso interno).', 'review-stars-redirect' ); ?></p>
+							</td>
+						</tr>
+					</table>
+
+					<h3><?php esc_html_e( 'Regole di Redirect', 'review-stars-redirect' ); ?></h3>
+					<p class="description">
+						<?php esc_html_e( 'Per ogni regola, seleziona le stelle e inserisci l\'URL di redirect. Puoi aggiungere quante regole vuoi.', 'review-stars-redirect' ); ?>
+					</p>
+
+					<div id="rsr-rules-container">
+						<?php
+						$rules = isset( $edit_instance['rules'] ) ? $edit_instance['rules'] : array();
+						if ( empty( $rules ) ) {
+							$rules = array(
+								array(
+									'stars' => array(),
+									'url'   => '',
+								),
+							);
+						}
+						$rule_index = 0;
+						foreach ( $rules as $rule ) :
+							?>
+							<div class="rsr-rule-row" data-index="<?php echo esc_attr( $rule_index ); ?>">
+								<div class="rsr-rule-header">
+									<strong><?php echo esc_html( sprintf( __( 'Regola %d', 'review-stars-redirect' ), $rule_index + 1 ) ); ?></strong>
+									<button type="button" class="button rsr-remove-rule" title="<?php esc_attr_e( 'Rimuovi regola', 'review-stars-redirect' ); ?>">&times;</button>
+								</div>
+								<div class="rsr-rule-content">
+									<div class="rsr-rule-stars">
+										<label><?php esc_html_e( 'Stelle:', 'review-stars-redirect' ); ?></label>
+										<div class="rsr-star-checkboxes">
+											<?php for ( $s = 1; $s <= 5; $s++ ) : ?>
+												<label class="rsr-star-checkbox">
+													<input type="checkbox"
+														name="rsr_rule_stars[<?php echo esc_attr( $rule_index ); ?>][]"
+														value="<?php echo esc_attr( $s ); ?>"
+														<?php checked( in_array( $s, $rule['stars'], true ) ); ?> />
+													<?php echo esc_html( $s ); ?> &#9733;
+												</label>
+											<?php endfor; ?>
+										</div>
+									</div>
+									<div class="rsr-rule-url">
+										<label><?php esc_html_e( 'URL redirect:', 'review-stars-redirect' ); ?></label>
+										<input type="url"
+											name="rsr_rule_urls[<?php echo esc_attr( $rule_index ); ?>]"
+											value="<?php echo esc_attr( $rule['url'] ); ?>"
+											class="regular-text"
+											placeholder="https://esempio.com/link" />
+									</div>
+								</div>
+							</div>
+							<?php
+							$rule_index++;
+						endforeach;
+						?>
+					</div>
+
+					<p>
+						<button type="button" id="rsr-add-rule" class="button button-secondary">
+							+ <?php esc_html_e( 'Aggiungi Regola', 'review-stars-redirect' ); ?>
+						</button>
+					</p>
+
+					<?php submit_button( __( 'Salva Impostazioni', 'review-stars-redirect' ) ); ?>
+				</form>
+
+				<p>
+					<a href="<?php echo esc_url( admin_url( 'options-general.php?page=review-stars-redirect' ) ); ?>" class="button">
+						&larr; <?php esc_html_e( 'Torna alla lista', 'review-stars-redirect' ); ?>
+					</a>
+				</p>
+			</div>
+
+		<?php else : ?>
+			<!-- LISTA ISTANZE -->
+			<div class="rsr-list-section">
+				<?php if ( ! empty( $instances ) ) : ?>
+					<table class="wp-list-table widefat fixed striped">
+						<thead>
+							<tr>
+								<th><?php esc_html_e( 'Nome', 'review-stars-redirect' ); ?></th>
+								<th><?php esc_html_e( 'Shortcode', 'review-stars-redirect' ); ?></th>
+								<th><?php esc_html_e( 'Regole', 'review-stars-redirect' ); ?></th>
+								<th><?php esc_html_e( 'Azioni', 'review-stars-redirect' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $instances as $instance ) : ?>
+								<tr>
+									<td><strong><?php echo esc_html( $instance['name'] ); ?></strong></td>
+									<td>
+										<code class="rsr-shortcode-code" onclick="if(window.getSelection){var r=document.createRange();r.selectNodeContents(this);var s=window.getSelection();s.removeAllRanges();s.addRange(r);document.execCommand('copy');}">
+											[review_stars_redirect id="<?php echo esc_attr( $instance['id'] ); ?>"]
+										</code>
+									</td>
+									<td>
+										<?php
+										$rules_count = isset( $instance['rules'] ) ? count( $instance['rules'] ) : 0;
+										echo esc_html(
+											sprintf(
+												/* translators: %d: numero di regole */
+												_n( '%d regola', '%d regole', $rules_count, 'review-stars-redirect' ),
+												$rules_count
+											)
+										);
+										?>
+									</td>
+									<td>
+										<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'review-stars-redirect', 'edit' => $instance['id'] ), admin_url( 'options-general.php' ) ) ); ?>" class="button button-small">
+											<?php esc_html_e( 'Modifica', 'review-stars-redirect' ); ?>
+										</a>
+										<a href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'page' => 'review-stars-redirect', 'rsr_delete' => $instance['id'] ), admin_url( 'options-general.php' ) ), 'rsr_delete_' . $instance['id'] ) ); ?>"
+											class="button button-small rsr-delete-btn"
+											onclick="return confirm('<?php echo esc_js( __( 'Sei sicuro di voler eliminare questo shortcode?', 'review-stars-redirect' ) ); ?>');">
+											<?php esc_html_e( 'Elimina', 'review-stars-redirect' ); ?>
+										</a>
+									</td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				<?php else : ?>
+					<p class="rsr-no-instances"><?php esc_html_e( 'Nessuno shortcode creato. Crea il primo qui sotto!', 'review-stars-redirect' ); ?></p>
+				<?php endif; ?>
+
+				<!-- FORM CREAZIONE -->
+				<div class="rsr-create-section">
+					<h2><?php esc_html_e( 'Crea Nuovo Shortcode', 'review-stars-redirect' ); ?></h2>
+					<form method="post" action="">
+						<?php wp_nonce_field( 'rsr_create_instance' ); ?>
+						<input type="hidden" name="rsr_action" value="create" />
+						<table class="form-table">
+							<tr>
+								<th scope="row">
+									<label for="rsr_new_name"><?php esc_html_e( 'Nome', 'review-stars-redirect' ); ?></label>
+								</th>
+								<td>
+									<input type="text" id="rsr_new_name" name="rsr_new_name" class="regular-text"
+										placeholder="<?php esc_attr_e( 'Es. Homepage, Pagina Contatti...', 'review-stars-redirect' ); ?>" />
+									<p class="description"><?php esc_html_e( 'Un nome identificativo (uso interno, non visibile ai visitatori).', 'review-stars-redirect' ); ?></p>
+								</td>
+							</tr>
+						</table>
+						<?php submit_button( __( 'Crea Shortcode', 'review-stars-redirect' ), 'primary' ); ?>
+					</form>
+				</div>
+			</div>
+		<?php endif; ?>
 	</div>
 	<?php
 }
@@ -218,7 +466,7 @@ function rsr_plugin_action_links( $links ) {
 add_filter( 'plugin_action_links_' . RSR_PLUGIN_BASENAME, 'rsr_plugin_action_links' );
 
 /**
- * Carica il foglio di stile admin nella pagina impostazioni del plugin.
+ * Carica gli asset admin nella pagina impostazioni del plugin.
  *
  * @param string $hook Hook della pagina corrente.
  */
@@ -232,6 +480,24 @@ function rsr_admin_enqueue_scripts( $hook ) {
 		array(),
 		RSR_VERSION
 	);
+	wp_enqueue_script(
+		'rsr-admin-script',
+		RSR_PLUGIN_URL . 'js/admin-script.js',
+		array(),
+		RSR_VERSION,
+		true
+	);
+	wp_localize_script(
+		'rsr-admin-script',
+		'rsrAdmin',
+		array(
+			'starLabel'      => __( 'Stelle:', 'review-stars-redirect' ),
+			'urlLabel'       => __( 'URL redirect:', 'review-stars-redirect' ),
+			'ruleLabel'      => __( 'Regola', 'review-stars-redirect' ),
+			'removeTitle'    => __( 'Rimuovi regola', 'review-stars-redirect' ),
+			'urlPlaceholder' => 'https://esempio.com/link',
+		)
+	);
 }
 add_action( 'admin_enqueue_scripts', 'rsr_admin_enqueue_scripts' );
 
@@ -244,13 +510,38 @@ add_action( 'admin_enqueue_scripts', 'rsr_admin_enqueue_scripts' );
 /**
  * Registra e renderizza lo shortcode [review_stars_redirect].
  *
- * @param array $atts Attributi dello shortcode (non utilizzati).
+ * Ogni shortcode ha un attributo "id" che corrisponde all'istanza configurata.
+ * Le regole di redirect sono passate come data attribute JSON.
+ *
+ * @param array $atts Attributi dello shortcode.
  * @return string HTML dello shortcode.
  */
 function rsr_render_shortcode( $atts ) {
-	// Recupera i link configurati.
-	$low_url  = get_option( 'rsr_low_rating_url', '' );
-	$high_url = get_option( 'rsr_high_rating_url', '' );
+	$atts = shortcode_atts(
+		array(
+			'id' => '',
+		),
+		$atts,
+		'review_stars_redirect'
+	);
+
+	$instance_id = sanitize_text_field( $atts['id'] );
+	if ( empty( $instance_id ) ) {
+		return '<!-- Review Stars Redirect: attributo id mancante -->';
+	}
+
+	$instance = rsr_get_instance( $instance_id );
+	if ( ! $instance ) {
+		return '<!-- Review Stars Redirect: istanza non trovata -->';
+	}
+
+	// Costruisci la mappa stella => URL dalle regole.
+	$star_map = array();
+	foreach ( $instance['rules'] as $rule ) {
+		foreach ( $rule['stars'] as $star ) {
+			$star_map[ (string) $star ] = $rule['url'];
+		}
+	}
 
 	// Carica CSS e JS solo quando lo shortcode è usato.
 	wp_enqueue_style(
@@ -268,18 +559,14 @@ function rsr_render_shortcode( $atts ) {
 		true
 	);
 
-	// Passa le variabili al JavaScript frontend.
-	wp_localize_script(
-		'rsr-frontend-script',
-		'rsrData',
-		array(
-			'lowUrl'  => esc_url( $low_url ),
-			'highUrl' => esc_url( $high_url ),
-		)
-	);
+	// Genera un ID univoco per il wrapper.
+	static $instance_counter = 0;
+	$instance_counter++;
+	$wrapper_id = 'rsr-instance-' . $instance_counter;
 
-	// Genera l'HTML delle stelline.
-	$output  = '<div class="rsr-stars-wrapper" role="group" aria-label="' . esc_attr__( 'Valutazione', 'review-stars-redirect' ) . '">';
+	// Genera l'HTML delle stelline con la mappa dei redirect come data attribute.
+	$output  = '<div class="rsr-stars-wrapper" id="' . esc_attr( $wrapper_id ) . '" role="group" aria-label="' . esc_attr__( 'Valutazione', 'review-stars-redirect' ) . '"';
+	$output .= ' data-rsr-map="' . esc_attr( wp_json_encode( $star_map ) ) . '">';
 	$output .= '<div class="rsr-stars">';
 
 	for ( $i = 1; $i <= 5; $i++ ) {
@@ -287,7 +574,6 @@ function rsr_render_shortcode( $atts ) {
 			/* translators: %d: numero della stella */
 			sprintf( __( '%d stella', 'review-stars-redirect' ), $i )
 		) . '">';
-		// SVG stella — leggero, scalabile, senza dipendenze esterne.
 		$output .= '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40" class="rsr-star-svg">';
 		$output .= '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01L12 2z"/>';
 		$output .= '</svg>';
@@ -302,92 +588,11 @@ function rsr_render_shortcode( $atts ) {
 add_shortcode( 'review_stars_redirect', 'rsr_render_shortcode' );
 
 /**
- * Carica lo script di auto-fill sul frontend.
- *
- * Quando la pagina contiene il parametro GET "rsr_rating", carica
- * lo script che compila automaticamente il campo del form con l'ID configurato.
- * Funziona con Elementor Forms, CF7, WPForms, ecc.
- */
-function rsr_enqueue_autofill_script() {
-	// Carica solo sul frontend, non nell'admin.
-	if ( is_admin() ) {
-		return;
-	}
-
-	// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-	if ( ! isset( $_GET['rsr_rating'] ) ) {
-		return;
-	}
-
-	wp_enqueue_script(
-		'rsr-autofill-script',
-		RSR_PLUGIN_URL . 'js/review-stars-autofill.js',
-		array(),
-		RSR_VERSION,
-		true
-	);
-
-	$field_id = get_option( 'rsr_rating_field_id', 'rating' );
-
-	wp_localize_script(
-		'rsr-autofill-script',
-		'rsrAutofill',
-		array(
-			'fieldId' => sanitize_text_field( $field_id ),
-		)
-	);
-}
-add_action( 'wp_enqueue_scripts', 'rsr_enqueue_autofill_script' );
-
-/**
- * Shortcode [review_stars_rating]: stampa il valore della valutazione selezionata.
- *
- * Legge il parametro GET "rsr_rating" dall'URL (aggiunto automaticamente dal redirect
- * delle stelline) e restituisce il valore numerico (1-5).
- * Utile come fallback per plugin form che supportano shortcode nei default value.
- *
- * Attributi opzionali:
- * - default: valore da mostrare se il parametro non è presente (default: vuoto).
- *
- * Esempio: [review_stars_rating default="0"]
- *
- * @param array $atts Attributi dello shortcode.
- * @return string Valore della valutazione.
- */
-function rsr_render_rating_shortcode( $atts ) {
-	$atts = shortcode_atts(
-		array(
-			'default' => '',
-		),
-		$atts,
-		'review_stars_rating'
-	);
-
-	// Legge il parametro rsr_rating dall'URL.
-	// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-	$rating = isset( $_GET['rsr_rating'] ) ? absint( $_GET['rsr_rating'] ) : 0;
-
-	// Valida che il valore sia tra 1 e 5.
-	if ( $rating >= 1 && $rating <= 5 ) {
-		return (string) $rating;
-	}
-
-	return esc_html( $atts['default'] );
-}
-add_shortcode( 'review_stars_rating', 'rsr_render_rating_shortcode' );
-
-/**
  * Imposta i valori predefiniti al momento dell'attivazione del plugin.
  */
 function rsr_activate() {
-	if ( false === get_option( 'rsr_low_rating_url' ) ) {
-		add_option( 'rsr_low_rating_url', '' );
-	}
-	if ( false === get_option( 'rsr_high_rating_url' ) ) {
-		add_option( 'rsr_high_rating_url', '' );
-	}
-	if ( false === get_option( 'rsr_rating_field_id' ) ) {
-		add_option( 'rsr_rating_field_id', 'rating' );
+	if ( false === get_option( 'rsr_instances' ) ) {
+		add_option( 'rsr_instances', array() );
 	}
 }
 register_activation_hook( __FILE__, 'rsr_activate' );
@@ -396,6 +601,8 @@ register_activation_hook( __FILE__, 'rsr_activate' );
  * Pulizia delle opzioni alla disinstallazione del plugin.
  */
 function rsr_uninstall() {
+	delete_option( 'rsr_instances' );
+	// Pulizia vecchie opzioni v1.
 	delete_option( 'rsr_low_rating_url' );
 	delete_option( 'rsr_high_rating_url' );
 	delete_option( 'rsr_rating_field_id' );

@@ -1,10 +1,11 @@
 /**
- * Review Stars Redirect — Frontend JavaScript
+ * Review Stars Redirect — Frontend JavaScript v2.0.0
  *
  * Gestisce l'interazione con le stelline:
  * - Hover progressivo
- * - Click e redirect in base alla valutazione
+ * - Click e redirect in base alla mappa stella => URL (per istanza)
  * - Supporto tastiera per accessibilità
+ * - Supporto multipli shortcode nella stessa pagina
  *
  * Nessuna dipendenza esterna (no jQuery).
  */
@@ -18,10 +19,21 @@
 		var wrappers = document.querySelectorAll( '.rsr-stars-wrapper' );
 
 		wrappers.forEach( function ( wrapper ) {
-			var stars = wrapper.querySelectorAll( '.rsr-star' );
+			var stars  = wrapper.querySelectorAll( '.rsr-star' );
+			var mapRaw = wrapper.getAttribute( 'data-rsr-map' );
+			var starMap = {};
 
 			if ( ! stars.length ) {
 				return;
+			}
+
+			// Decodifica la mappa stella => URL dal data attribute.
+			if ( mapRaw ) {
+				try {
+					starMap = JSON.parse( mapRaw );
+				} catch ( e ) {
+					starMap = {};
+				}
 			}
 
 			// Hover: evidenzia progressivamente le stelle.
@@ -35,10 +47,10 @@
 					clearHighlight( stars, 'rsr-hover' );
 				});
 
-				// Click: redirect in base alla valutazione.
+				// Click: redirect in base alla mappa.
 				star.addEventListener( 'click', function () {
 					var value = parseInt( star.getAttribute( 'data-value' ), 10 );
-					handleRating( stars, value );
+					handleRating( stars, value, starMap );
 				});
 
 				// Supporto tastiera: Enter e Space.
@@ -46,7 +58,7 @@
 					if ( e.key === 'Enter' || e.key === ' ' ) {
 						e.preventDefault();
 						var value = parseInt( star.getAttribute( 'data-value' ), 10 );
-						handleRating( stars, value );
+						handleRating( stars, value, starMap );
 					}
 				});
 			});
@@ -86,38 +98,25 @@
 	/**
 	 * Gestisce la selezione della valutazione e il redirect.
 	 *
-	 * 1-3 stelle => redirect al link per recensioni interne.
-	 * 4-5 stelle => redirect al link per recensioni Google.
+	 * Legge la mappa stella => URL dal data attribute dell'istanza
+	 * e reindirizza all'URL corrispondente.
 	 *
-	 * @param {NodeList} stars Elenco delle stelle.
-	 * @param {number}   value Valore selezionato (1-5).
+	 * @param {NodeList} stars   Elenco delle stelle.
+	 * @param {number}   value   Valore selezionato (1-5).
+	 * @param {Object}   starMap Mappa stella => URL.
 	 */
-	function handleRating( stars, value ) {
+	function handleRating( stars, value, starMap ) {
 		// Feedback visivo: mostra la selezione.
 		highlightStars( stars, value, 'rsr-selected' );
 
-		// Determina l'URL di redirect.
-		var url = '';
-
-		if ( typeof rsrData === 'undefined' ) {
-			return;
-		}
-
-		if ( value >= 1 && value <= 3 ) {
-			url = rsrData.lowUrl || '';
-		} else if ( value >= 4 && value <= 5 ) {
-			url = rsrData.highUrl || '';
-		}
+		// Cerca l'URL nella mappa per il valore selezionato.
+		var url = starMap[ String( value ) ] || '';
 
 		// Esegui il redirect se l'URL è configurato.
-		// Aggiunge il parametro rsr_rating=N all'URL per passare il valore al form di destinazione.
 		if ( url ) {
-			var separator = url.indexOf( '?' ) === -1 ? '?' : '&';
-			var redirectUrl = url + separator + 'rsr_rating=' + value;
-
 			// Breve ritardo per mostrare il feedback visivo prima del redirect.
 			setTimeout( function () {
-				window.location.href = redirectUrl;
+				window.location.href = url;
 			}, 250 );
 		}
 	}
