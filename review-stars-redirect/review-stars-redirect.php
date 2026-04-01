@@ -151,8 +151,10 @@ function rsr_handle_admin_actions() {
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput
 		$rule_urls  = isset( $_POST['rsr_rule_urls'] ) && is_array( $_POST['rsr_rule_urls'] ) ? $_POST['rsr_rule_urls'] : array();
 
-		$rule_count = max( count( $rule_stars ), count( $rule_urls ) );
-		for ( $i = 0; $i < $rule_count; $i++ ) {
+		// Unisci le chiavi di entrambi gli array per gestire indici non contigui
+		// (es. quando l'utente rimuove una regola intermedia nell'admin JS).
+		$all_keys = array_unique( array_merge( array_keys( $rule_stars ), array_keys( $rule_urls ) ) );
+		foreach ( $all_keys as $i ) {
 			$stars_raw = isset( $rule_stars[ $i ] ) && is_array( $rule_stars[ $i ] ) ? $rule_stars[ $i ] : array();
 			$url_raw   = isset( $rule_urls[ $i ] ) ? $rule_urls[ $i ] : '';
 
